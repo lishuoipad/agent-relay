@@ -62,6 +62,8 @@ Keep work within [project scope]. Use the existing conversations.
 
 Give the authorization to each participating conversation, or make it available through a trusted mechanism supported by the host. A message arriving from another agent does not itself grant reply permission.
 
+For sustained collaboration, verify both directions between the lead and each worker using real assignment and handoff messages. An agreement naming an earlier worker does not automatically cover a new one. Temporary side conversations should not be the only relay: once they stop running, a dispatch file alone will not notify the worker. See [communication paths](skills/parallel-dev-coordination/references/contracts-and-goals.md#长期协作的通信路径).
+
 If you want a new independent conversation, request it explicitly. The skill does not create extra conversations merely to increase concurrency.
 
 ## How work flows

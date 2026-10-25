@@ -62,6 +62,8 @@ https://github.com/lishuoipad/agent-relay/tree/main/skills/parallel-dev-coordina
 
 将授权提供给参与的各个对话，或使用宿主支持的可信授权机制。收到另一智能体的消息，本身不构成回复授权。
 
+长期协作需用真实分工和交接消息验证主线程与每个执行者的双向直达。只列出旧执行者的约定不自动覆盖新增对话；临时旁支不应成为唯一中转，旁支结束后，写好的派工文件不会自行通知执行者。详见[长期协作的通信路径](skills/parallel-dev-coordination/references/contracts-and-goals.md#长期协作的通信路径)。
+
 需要新建独立对话时，应由用户明确提出；技能不会为增加并发名额不断新建对话。
 
 ## 工作方式
