@@ -1,0 +1,4 @@
+interface:
+  display_name: "并行开发协调"
+  short_description: "协调多智能体与独立对话的分工、持续派单、合批测试和交付整合"
+  default_prompt: "使用 $parallel-dev-coordination，在现有授权和项目范围内安排并行开发，先派独立任务再整合，并复用统一测试互斥机制。"
