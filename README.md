@@ -10,6 +10,16 @@ Agent Relay is a reusable **Codex skill for coordinating parallel software devel
 
 It supports both subagents within one task and separately authorized development conversations. The skill identifier is **`parallel-dev-coordination`**.
 
+## Background: why coordinate across conversations?
+
+Agent Relay grew out of a practical development constraint: **in the Codex environment we used, each conversation could run at most 3 subagents concurrently, excluding its primary agent.** A project with more independent modules could outgrow the subagent slots available in a single conversation.
+
+We therefore used **multiple collaborating conversations, each directing its own subagents**. The lead conversation handled project assignments, shared interfaces, acceptance and final integration. Other development conversations owned independent modules and delegated implementation or review within their available slots. This let more subagents contribute to the same project than one conversation could coordinate alone.
+
+More workers brought coordination problems: conflicting edits, deliveries awaiting acceptance, next batches that were never actually dispatched, and dependence on temporary relay conversations. Agent Relay turns the practices developed to address these problems into a reusable skill for sustained handoffs across conversations and their subagents.
+
+The number 3 describes our development environment, not a fixed limit across all Codex versions. The current [official configuration reference](https://learn.chatgpt.com/docs/config-file/config-reference) includes a per-session subagent concurrency setting; actual availability depends on the client, configuration and runtime tools. Each conversation uses its authorized execution capacity, subject to account quotas and applicable limits.
+
 ## What it helps you do
 
 - **Dispatch before integrating.** Give available workers ready, independent work before the lead starts integrating the previous batch.
