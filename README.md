@@ -15,6 +15,7 @@ It supports both subagents within one task and separately authorized development
 - **Dispatch before integrating.** Give available workers ready, independent work before the lead starts integrating the previous batch.
 - **Keep one writer per file.** Assign precise file boundaries and settle shared interfaces before dependent work starts.
 - **Close the handoff loop.** Deliver evidence, receive a clear acceptance or repair request, and prepare the next batch.
+- **Make dispatch unambiguous.** Record and send one assignment tied to a frozen specification; an old “reserved” label does not override a valid go-ahead.
 - **Batch expensive tests.** Keep independent checks parallel while coordinating actual shared resources.
 - **Avoid desktop input conflicts.** Recognize that hidden windows, separate ports, and separate worktrees do not isolate the system mouse or keyboard.
 - **Report real progress.** Distinguish implementation, module acceptance, integration, visual review, and device or production validation.
@@ -76,6 +77,10 @@ flowchart LR
 
 The lead can integrate one batch while other workers implement another. Preparation of the next batch is not permission to start it: the assignment must say whether work may begin now or must wait for a dependency or acceptance decision.
 
+Keep hashed specifications separate from live execution status. The authorized dispatcher records the owner, specification version, start decision and prerequisites in the existing task ledger, then sends that same receipt to the worker. This leaves frozen inputs intact while explicitly superseding an earlier reservation. A valid receipt does not require another round of permission just because the original specification still says “reserved.” Newer user pauses, ownership conflicts and unmet dependencies still take precedence.
+
+Registration, successful message delivery and actual work starting are separate facts. If notification fails, check the original receipt and worker state before resending it. Reuse the current ledger and messaging tools; Agent Relay does not install a dispatch service.
+
 | Role | Owns |
 | --- | --- |
 | Lead / coordinator | Scope, dependencies, shared interfaces, integration, acceptance and final validation |
@@ -126,10 +131,12 @@ When the user explicitly authorizes batch Goals:
 2. Implement, verify and deliver it.
 3. Obtain the agreed acceptance; keep outstanding integration or device checks visible.
 4. Mark the current Goal complete only when its conditions are met.
-5. With a clear next assignment and authorization, create the next Goal as the complete standing rules plus the new batch. Change only the batch-specific content.
+5. With a clear next assignment and authorization, check the full candidate against the host's current length limit, then create the next Goal as the complete standing rules plus the new batch. Change only the batch-specific content.
 6. Immediately read the Goal back through a separate read operation and compare its full objective, batch and actual status. Check again when restoring context or handing off a batch.
 
-Do not replace approved standing rules with a compact summary or “follow the previous requirements.” If a host length limit prevents full inclusion, preserve the text and explain the limit. A readable, versioned rules document is an alternative only when the user has approved that arrangement; read and verify it at each handoff. Do not switch to references when the user requires the full text in every Goal.
+Check length before sending a proposed Goal and again before creation, including headings and standing rules; do not assume one client's limit applies everywhere. If needed, remove duplication from the batch description while preserving its scope, file boundaries, interfaces and acceptance conditions. Do not shorten text the user requires verbatim.
+
+Do not replace approved standing rules with a compact summary or “follow the previous requirements.” If the text still cannot fit, preserve it and explain the limit. A readable, versioned rules document is an alternative only when the user has approved that arrangement; read and verify it at each handoff. Do not switch to references when the user requires the full text in every Goal.
 
 **A successful creation response is not a verified read-back.** If the read-back is empty or different, check the query, thread identity, user pause/clear actions, budgets and concurrent updates first. Report an unexplained mismatch instead of immediately recreating the Goal. At most one recreation attempt is allowed, followed by another read-back, only after confirming that creation remains authorized, no unfinished Goal exists, and those conflicting conditions have been ruled out. Never overwrite an existing Goal or bypass user controls or budgets.
 
@@ -161,6 +168,8 @@ skills/parallel-dev-coordination/
 ```
 
 The initial skill passed the bundled skill-creator structural validator and local checks of metadata and reference links. Those checks do not establish universal runtime compatibility or benchmarked productivity gains.
+
+Evaluate relay behavior through actual acceptance, dispatch and work-start records, including waiting and rework. Resolving one stalled handoff is not evidence of consistently uninterrupted delivery; observe later real batches without creating artificial work or a monitoring service.
 
 ## Contributing
 
