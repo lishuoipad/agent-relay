@@ -82,6 +82,8 @@ Keep hashed specifications separate from live execution status. The authorized d
 
 Registration, successful message delivery and actual work starting are separate facts. If notification fails, check the original receipt and worker state before resending it. Reuse the current ledger and messaging tools; Agent Relay does not install a dispatch service.
 
+After context recovery, if an old checkpoint says to work serially or denies dispatch permission while the user has updated the Goal, the worker should read its own current Goal before correcting stale records. A newer checkpoint timestamp does not renew an obsolete instruction, and hook injection does not grant its records new authority. Verify a repaired relay through the real batch's Goal read-back and a meaningful implementation change; updating the skill or sending a notification alone is not success.
+
 | Role | Owns |
 | --- | --- |
 | Lead / coordinator | Scope, dependencies, shared interfaces, integration, acceptance and final validation |
