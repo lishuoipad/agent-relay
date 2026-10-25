@@ -16,6 +16,7 @@ It supports both subagents within one task and separately authorized development
 - **Keep one writer per file.** Assign precise file boundaries and settle shared interfaces before dependent work starts.
 - **Close the handoff loop.** Deliver evidence, receive a clear acceptance or repair request, and prepare the next batch.
 - **Make dispatch unambiguous.** Record and send one assignment tied to a frozen specification; an old “reserved” label does not override a valid go-ahead.
+- **Match settings to each batch.** With user authorization, choose the worker's model and reasoning effort for the work, apply them through supported tools, and verify the effective settings.
 - **Batch expensive tests.** Keep independent checks parallel while coordinating actual shared resources.
 - **Retest failures and affected cases.** Reuse passing evidence whose relevant inputs are unchanged; include new coverage and real shared-component dependents without replaying unrelated suites after each small fix.
 - **Avoid desktop input conflicts.** Recognize that hidden windows, separate ports, and separate worktrees do not isolate the system mouse or keyboard.
@@ -92,6 +93,14 @@ After context recovery, if an old checkpoint says to work serially or denies dis
 
 If delivered batches pile up, reduce new dispatches and clear the integration queue. Do not create more work just to fill every slot.
 
+## Model and reasoning choices
+
+Before dispatching each batch, assess uncertainty, failure impact, and dependency complexity. With authorization to choose settings, the lead may use a lighter model for clear, narrow work and more reasoning for complex state or architecture. Similar work can keep its settings. Explicit user preferences and budgets take precedence; do not interrupt work in progress just to switch models.
+
+Record the target settings, rationale, tool result, and effective runtime evidence in the existing dispatch receipt. Creating a Goal or naming a model in a message does not apply a runtime setting. Independent conversations and subagents can have different tools and inheritance rules. If effective settings cannot be read back, mark them unverified and continue unaffected work; do not claim the switch succeeded.
+
+See [model routing and verification](skills/parallel-dev-coordination/references/model-routing.md) for task-based starting points and application rules. Agent Relay provides instructions, not an automatic model router.
+
 ## Example: three workers and a lead
 
 For a client project with several independent screens:
@@ -167,6 +176,7 @@ skills/parallel-dev-coordination/
 ├── agents/openai.yaml
 └── references/
     ├── contracts-and-goals.md
+    ├── model-routing.md
     └── shared-input.md
 ```
 
