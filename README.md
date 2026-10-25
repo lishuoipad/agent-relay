@@ -17,6 +17,7 @@ It supports both subagents within one task and separately authorized development
 - **Close the handoff loop.** Deliver evidence, receive a clear acceptance or repair request, and prepare the next batch.
 - **Make dispatch unambiguous.** Record and send one assignment tied to a frozen specification; an old “reserved” label does not override a valid go-ahead.
 - **Batch expensive tests.** Keep independent checks parallel while coordinating actual shared resources.
+- **Retest failures and affected cases.** Reuse passing evidence whose relevant inputs are unchanged; include new coverage and real shared-component dependents without replaying unrelated suites after each small fix.
 - **Avoid desktop input conflicts.** Recognize that hidden windows, separate ports, and separate worktrees do not isolate the system mouse or keyboard.
 - **Report real progress.** Distinguish implementation, module acceptance, integration, visual review, and device or production validation.
 
