@@ -1,8 +1,10 @@
 # Agent Relay
 
-**Keep agents building while you integrate.**
+**Put your Codex team to work. Build in parallel, hand off smoothly, turn quota into results.**
 
 [简体中文](README.zh-CN.md) · [Read the skill](skills/parallel-dev-coordination/SKILL.md) · [MIT license](LICENSE)
+
+Agent Relay keeps independent agents building while the lead integrates their work, cutting waiting and rework. Especially handy for a sprint ahead of a quota reset from Tibo, Codex's product lead: put your remaining quota toward work you can review and accept.
 
 Agent Relay is a reusable **Codex skill for coordinating parallel software development**. It helps a lead agent assign independent work, keep file ownership clear, integrate completed batches, and hand off the next batch without turning every test into a coordination meeting.
 

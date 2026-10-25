@@ -1,8 +1,10 @@
 # Agent Relay · 智能体接力
 
-**其他智能体继续开发，主线程接力整合。**
+**让 Codex 团队并行开工、接力交付，把额度变成成果。**
 
 [English](README.md) · [技能正文](skills/parallel-dev-coordination/SKILL.md) · [MIT 许可](LICENSE)
+
+Agent Relay 让多智能体分工开发、持续接力、集中整合，减少等待与返工。特别适合在 Tibo（Codex 产品负责人）重置额度前集中冲刺，把剩余额度用在可验收的交付上。
 
 Agent Relay 是一个用于 **Codex 并行软件开发协调**的技能。它把任务拆分、文件归属、交付接收、合批测试和下一批接续整理为可复用流程，减少空等、冲突和反复确认。
 
