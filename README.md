@@ -120,13 +120,20 @@ Goals are optional. Ordinary assignments can remain ordinary tasks.
 
 When the user explicitly authorizes batch Goals:
 
-1. Define the batch and its completion conditions.
+1. Separate the complete, user-approved standing rules from the current batch, and define its scope and completion conditions.
 2. Implement, verify and deliver it.
 3. Obtain the agreed acceptance; keep outstanding integration or device checks visible.
 4. Mark the current Goal complete only when its conditions are met.
-5. With a clear next assignment and authorization, create the next Goal using the tools available in that conversation.
+5. With a clear next assignment and authorization, create the next Goal as the complete standing rules plus the new batch. Change only the batch-specific content.
+6. Immediately read the Goal back through a separate read operation and compare its full objective, batch and actual status. Check again when restoring context or handing off a batch.
+
+Do not replace approved standing rules with a compact summary or “follow the previous requirements.” If a host length limit prevents full inclusion, preserve the text and explain the limit. A readable, versioned rules document is an alternative only when the user has approved that arrangement; read and verify it at each handoff. Do not switch to references when the user requires the full text in every Goal.
+
+**A successful creation response is not a verified read-back.** If the read-back is empty or different, check the query, thread identity, user pause/clear actions, budgets and concurrent updates first. Report an unexplained mismatch instead of immediately recreating the Goal. At most one recreation attempt is allowed, followed by another read-back, only after confirming that creation remains authorized, no unfinished Goal exists, and those conflicting conditions have been ruled out. Never overwrite an existing Goal or bypass user controls or budgets.
 
 A cross-conversation message does not directly edit another conversation's Goal. The skill does not rewrite an unfinished Goal, fake completion to switch tasks, or start a background wake-up service. Without a next assignment, it waits for a message rather than inventing work.
+
+The skill supplies operating instructions, not Goal storage, and cannot guarantee that a Goal will never go missing. Verify rule inheritance, creation responses, independent read-backs and UI display separately; do not attribute an unexplained failure to the app or the skill. See the [official OpenAI Goal documentation](https://developers.openai.com/cookbook/examples/codex/using_goals_in_codex) for thread-scoped state and lifecycle controls.
 
 Templates: [Assignments, handoffs and batch Goals](skills/parallel-dev-coordination/references/contracts-and-goals.md).
 
