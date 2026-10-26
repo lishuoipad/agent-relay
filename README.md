@@ -30,6 +30,7 @@ The number 3 describes our development environment, not a fixed limit across all
 - **Match settings to each batch.** With user authorization, choose the worker's model and reasoning effort for the work, apply them through supported tools, and verify the effective settings.
 - **Batch expensive tests.** Keep independent checks parallel while coordinating actual shared resources.
 - **Retest failures and affected cases.** Reuse passing evidence whose relevant inputs are unchanged; include new coverage and real shared-component dependents without replaying unrelated suites after each small fix.
+- **Reduce repeated uploads.** Start with bounded runtime diagnostics, reuse a prior visual conclusion only when image bytes, relevant inputs and current state evidence agree, and retain first-time and affected visual reviews. See [upload and visual evidence guidance](skills/parallel-dev-coordination/references/upload-efficiency.md). These are workflow rules; Agent Relay does not automatically suppress image uploads, restore WebSocket transport or remove historical request bodies.
 - **Avoid desktop input conflicts.** Recognize that hidden windows, separate ports, and separate worktrees do not isolate the system mouse or keyboard.
 - **Report real progress.** Distinguish implementation, module acceptance, integration, visual review, and device or production validation.
 
