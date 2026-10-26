@@ -25,6 +25,7 @@ The number 3 describes our development environment, not a fixed limit across all
 - **Dispatch before integrating.** Give available workers ready, independent work before the lead starts integrating the previous batch.
 - **Keep one writer per file.** Assign precise file boundaries and settle shared interfaces before dependent work starts.
 - **Close the handoff loop.** Deliver evidence, receive a clear acceptance or repair request, and prepare the next batch.
+- **Notice idle workers without busy polling.** Temporarily reuse an idle subagent for event-based observation, or let the lead watch directly when development needs the available slots.
 - **Make dispatch unambiguous.** Record and send one assignment tied to a frozen specification; an old “reserved” label does not override a valid go-ahead.
 - **Match settings to each batch.** With user authorization, choose the worker's model and reasoning effort for the work, apply them through supported tools, and verify the effective settings.
 - **Batch expensive tests.** Keep independent checks parallel while coordinating actual shared resources.
@@ -104,6 +105,20 @@ After context recovery, if an old checkpoint says to work serially or denies dis
 | Reviewer | Bounded review against source requirements and evidence; no implied ownership of unrelated files |
 
 If delivered batches pile up, reduce new dispatches and clear the integration queue. Do not create more work just to fill every slot.
+
+## Observe idle workers and keep batches moving
+
+For authorized parallel work, the lead can temporarily reuse an existing idle subagent to watch worker conversations. Give it specific targets and a bounded observation period. If existing subagents have ready development work, prioritize that work and let the lead observe directly. Agent Relay does not reserve a permanent monitoring slot or install a background service.
+
+Use the host's event-wait interface, such as `wait_threads`, with a cursor per target. Remember the observed turn, batch and handled decision. Unchanged state does not require another full history read or status message. If an already-idle target keeps returning the same event immediately, remove it from the active wait set until a new dispatch or normal handoff check makes it relevant again.
+
+The observer distinguishes work in progress, delivery awaiting acceptance, repairs, an unmet dependency, and an accepted worker with no next assignment. It reports actionable changes to its parent lead, including a ready next batch, dependencies and file conflicts. It does not message independent workers, dispatch work, alter their Goals, titles or model settings, or write shared project files.
+
+Before a long integration or test batch and after a delivery, the lead handles the observation: accept or request repairs, formally dispatch ready independent work, or record the specific dependency that prevents it. Reserve at most one next batch per worker. Hand observation back to the lead when the temporary observer finishes or is needed for development.
+
+Record the chosen observer or direct-watch mode, cursors, the first real check, the lead's decision, delivery of the assignment and evidence of work advancing. Keep setup, delivery, preliminary checks and meaningful implementation separate: an active indicator or a notification does not prove a coding handoff resumed. One successful transition does not establish continuous reliability.
+
+See [observer responsibilities and verification](skills/parallel-dev-coordination/references/contracts-and-goals.md#观察者与首次接续核验).
 
 ## Model and reasoning choices
 
