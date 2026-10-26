@@ -158,6 +158,8 @@ When the user explicitly authorizes batch Goals:
 5. With a clear next assignment and authorization, check the full candidate against the host's current length limit, then create the next Goal as the complete standing rules plus the new batch. Change only the batch-specific content.
 6. Immediately read the Goal back through a separate read operation and compare its full objective, batch and actual status. Check again when restoring context or handing off a batch.
 
+If the user asks conversation names to follow Goals, the worker updates its title after verifying the new Goal, preserving the project/role/worker prefix and replacing the task portion. The lead checks the returned title during the handoff. A reserved next batch does not change the title early; renaming, Goal verification, and runtime model settings remain separate checks.
+
 Check length before sending a proposed Goal and again before creation, including headings and standing rules; do not assume one client's limit applies everywhere. If needed, remove duplication from the batch description while preserving its scope, file boundaries, interfaces and acceptance conditions. Do not shorten text the user requires verbatim.
 
 Do not replace approved standing rules with a compact summary or “follow the previous requirements.” If the text still cannot fit, preserve it and explain the limit. A readable, versioned rules document is an alternative only when the user has approved that arrangement; read and verify it at each handoff. Do not switch to references when the user requires the full text in every Goal.
