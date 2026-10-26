@@ -183,11 +183,19 @@ flowchart LR
 
 可复用文案见[派工、交付与批次 Goal](skills/parallel-dev-coordination/references/contracts-and-goals.md)。
 
+## 模型容量故障恢复
+
+另提供可选的 [Goal 暂停与恢复保护](skills/parallel-dev-coordination/references/goal-lifecycle.md)：通过原生工具 hook，将一次暂停绑定到本轮新的人类指令，核对真实 Goal，阻止旧暂停重放。安装保留已有 hook，须经原生审核；它不会自行恢复目标、写 Codex 数据库或重置预算，文件安装完成不等于已生效。
+
+仓库提供可选的[宿主恢复程序](skills/parallel-dev-coordination/references/capacity-recovery.md)：只识别明确容量故障，等原生重试结束后有限退避，保持 Goal、暂停状态、文件归属与推理强度。备用模型仅接受明确获准的 `gpt-6.1-sol`，固定模型的对话仍只重试原模型。发送结果不明时停止重发，失败前已执行的动作须先核对真实结果。
+
+程序不依赖模型判断，默认只观察，运行时间有限。执行模式要求原宿主开放可连接的 app-server 控制 socket，并明确恢复授权和唯一派发所有者；只有专属 stdio 的桌面无法直接接入。已执行工具的失败还需要项目结果核对适配器。代码测试、宿主接入、请求接受和真实任务恢复分别验收；不自动安装服务、创建定时任务或接管现有开发聊天。
+
 ## 使用边界
 
 这个技能不提供额外并发名额、更多账号额度或确定的加速倍数，也不自动授予新建对话、跨对话消息、发布代码或操作生产系统的权限。
 
-它不是后台服务、插件服务器、可执行调度器或鼠标控制程序，也不替代项目自身的需求和验收标准。实际可执行能力取决于当前客户端、工具及权限。
+它不会安装后台服务、插件服务器、通用调度器或鼠标控制程序，也不替代项目自身的需求和验收标准。可选容量恢复程序只有显式启动后才运行；实际能力取决于当前客户端、工具及权限。
 
 技能正文目前为中文，README 提供中英文版本。不绑定任何游戏、引擎、项目路径或固定对话 ID。
 
@@ -197,7 +205,14 @@ flowchart LR
 skills/parallel-dev-coordination/
 ├── SKILL.md
 ├── agents/openai.yaml
+├── scripts/
+│   ├── capacity_recovery.py
+│   ├── goal_guard.py
+│   ├── install_goal_guard.py
+│   └── recovery_rpc.py
 └── references/
+    ├── capacity-recovery.md
+    ├── goal-lifecycle.md
     ├── contracts-and-goals.md
     ├── model-routing.md
     └── shared-input.md

@@ -120,6 +120,14 @@ Record the chosen observer or direct-watch mode, cursors, the first real check, 
 
 See [observer responsibilities and verification](skills/parallel-dev-coordination/references/contracts-and-goals.md#观察者与首次接续核验).
 
+## Capacity failure recovery
+
+An optional [Goal lifecycle guard](skills/parallel-dev-coordination/references/goal-lifecycle.md) prevents replaying stale pause instructions on supported native tool-hook paths. It binds a one-use pause receipt to a fresh user turn and checks the actual Goal state. Installation preserves existing hooks and requires native review; it never resumes Goals, edits Codex databases, resets budgets, or claims that file installation proves live protection.
+
+An optional [host-side recovery helper](skills/parallel-dev-coordination/references/capacity-recovery.md) handles explicit model-overload failures without asking a model to decide what to do. It waits for native retries to finish, applies bounded backoff, preserves user pauses and Goals, and persists dispatch intent so an ambiguous response is never blindly replayed. The only supported fallback is an explicitly approved `gpt-6.1-sol`, at the original reasoning effort; locked models are preserved.
+
+This is a finite, opt-in Python process, with observation as its default. It requires an existing, accessible app-server control socket and authorized exclusive dispatch ownership. A desktop exposing only its private stdio connection cannot be controlled by this helper. Tool actions already executed require a project-specific reconciliation adapter. Local tests passing does not establish live desktop recovery; the implementation does not install a service or schedule monitoring. See the linked guide for configuration, stop controls, notification integration and verification boundaries.
+
 ## Model and reasoning choices
 
 Before dispatching each batch, assess uncertainty, failure impact, and dependency complexity. With authorization to choose settings, the lead may use a lighter model for clear, narrow work and more reasoning for complex state or architecture. Similar work can keep its settings. Explicit user preferences and budgets take precedence; do not interrupt work in progress just to switch models.
@@ -191,7 +199,7 @@ Templates: [Assignments, handoffs and batch Goals](skills/parallel-dev-coordinat
 
 - Extra agent slots, a higher account quota, or a guaranteed speed multiplier.
 - Automatic permission to create conversations, message other threads, publish code or operate production systems.
-- A daemon, plugin server, executable scheduler, or mouse-control service.
+- An installed daemon, plugin server, general scheduler, or mouse-control service. The optional capacity helper runs only when explicitly launched against a compatible host.
 - A replacement for your project's requirements, security rules or acceptance criteria.
 - A guarantee that independent windows, worktrees or ports are fully isolated.
 
@@ -203,7 +211,14 @@ Available tools and client permissions determine what can actually run. The inst
 skills/parallel-dev-coordination/
 ├── SKILL.md
 ├── agents/openai.yaml
+├── scripts/
+│   ├── capacity_recovery.py
+│   ├── goal_guard.py
+│   ├── install_goal_guard.py
+│   └── recovery_rpc.py
 └── references/
+    ├── capacity-recovery.md
+    ├── goal-lifecycle.md
     ├── contracts-and-goals.md
     ├── model-routing.md
     └── shared-input.md
