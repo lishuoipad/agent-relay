@@ -121,6 +121,12 @@ flowchart LR
 
 详见[观察者职责与接续核验](skills/parallel-dev-coordination/references/contracts-and-goals.md#观察者与首次接续核验)。
 
+有界监督还提供[本地状态与接续入口](skills/parallel-dev-coordination/references/supervision.md)：共享恢复/通知额度、待命复查、确认后的决定及行动跟踪。主线程和参与对话承担实际执行；安装旁支不作为长期调度者。主线程忙于手机测试时，也在安全操作边界评估不冲突的已授权工作。
+
+Python reducer不会自行调用聊天工具、安装定时监控或唤醒模型；获准宿主提供新鲜观测并消费一次性通知许可。真实原生控制接口、独立告警和实际派工分别验证，未接通的能力保持关闭，不把本地测试当作完整后台监督已上线。
+
+重复核验嵌套 `path + sha256` 时，可复用[交付引用只读核验工具](skills/parallel-dev-coordination/references/delivery-verification.md)。审查进度和等待依赖补充在原接收记录中，并绑定冻结交付哈希；字节一致不能代替语义审查、视觉验收或实际开工证明。
+
 ## 模型与推理强度
 
 每批正式派工前，评估不确定性、错误后果和依赖复杂度。用户授权按任务选择后，主线程可为明确的小任务选择较轻模型，为复杂状态或架构问题提高推理强度。同等难度可以沿用；用户固定设置与预算优先，不为切换模型中断在途工作。
@@ -210,13 +216,20 @@ skills/parallel-dev-coordination/
 │   ├── capacity_recovery.py
 │   ├── goal_guard.py
 │   ├── install_goal_guard.py
-│   └── recovery_rpc.py
+│   ├── recovery_rpc.py
+│   ├── recovery_admission.py
+│   ├── supervision_store.py
+│   ├── supervision.py
+│   └── verify_delivery_refs.py
 └── references/
     ├── capacity-recovery.md
+    ├── supervision.md
+    ├── delivery-verification.md
     ├── goal-lifecycle.md
     ├── contracts-and-goals.md
     ├── model-routing.md
-    └── shared-input.md
+    ├── shared-input.md
+    └── upload-efficiency.md
 ```
 
 初版已通过内置 skill-creator 结构校验及本地元数据、引用链接检查。这些检查不等于所有客户端兼容性测试，也不构成开发效率提升的基准证明。

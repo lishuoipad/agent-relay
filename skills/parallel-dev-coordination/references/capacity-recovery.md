@@ -66,13 +66,27 @@ python scripts/capacity_recovery.py --config /task/recovery.json --state-dir /ta
 python scripts/capacity_recovery.py --config /task/recovery.json --state-dir /task/recovery-state --codex /path/codex --sock /existing/control.sock --duration-seconds 900
 ```
 
-第二条默认只观察，不订阅或发起续跑。授权和能力检查通过、派发所有权落实后，才加 `--execute`。执行模式订阅既有运行时，不覆盖 Goal、审批、沙箱、权限、工作目录或服务档位。进程运行时间有限，最大 6 小时，不自启、不自动重连、不自动续期。需要后台启动时由原宿主用隐藏窗口启动；临时旁支不能安排持续监控，应回主聊天完成启用。
+上面的 v1 配置只允许观察；加 `--execute` 会被拒绝。第二条默认只观察，不订阅或发起续跑。执行必须使用下述 v2 共享合同，授权和能力检查通过、派发所有权落实后，才加 `--execute`。执行模式订阅既有运行时，不覆盖 Goal、审批、沙箱、权限、工作目录或服务档位。进程运行时间有限，最大 6 小时，不自启、不自动重连、不自动续期。需要后台启动时由原宿主用隐藏窗口启动；临时旁支不能安排持续监控，应回主聊天完成启用。
 
 `state-dir/stop.request` 停止整次观察；`state-dir/<threadId>.pause` 禁止该对话接续，配置变化也停止运行。删除暂停文件不会自动解除持久化的暂停决定。不要删除发送结果未知的状态来“重试”。退出只关闭自己创建的 proxy，不结束已发出的开发轮次或共享 app-server。
 
-`state.json` 保存预算、状态和请求身份；`notifications.jsonl` 与标准输出只在状态变化时记录有界元数据。宿主应把 `attention`、`uncertain`、`cooldown` 接入现有通知入口。脚本本身不发送邮件、聊天消息或桌面弹窗；不能把本地日志写入当作用户已收到提醒。`sent` 的模型是请求值，`done` 才包含后续运行设置核对；功能验收另记。
+`state.json` 保存单入口状态和请求身份；v2 的共享监督数据库保存所有执行者共用的预算与发送意图。`notifications.jsonl` 与标准输出只在状态变化时记录有界元数据。宿主应把 `attention`、`uncertain`、`cooldown` 接入现有通知入口。脚本本身不发送邮件、聊天消息或桌面弹窗；不能把本地日志写入当作用户已收到提醒。`sent` 的模型是请求值，读回完成轮次只记 `awaiting_verification`，仍须独立核验实际项目进展，不能直接标记恢复成功。
 
-重新布防必须停止旧进程，检查原事件是否已执行、当前用户要求、预算及暂停状态；保留旧目录作为证据，使用经审核的新批次配置／状态目录。不得用新目录绕过仍适用的冷却、次数上限、未知结果或用户停止。
+重新布防必须停止旧进程，检查原事件是否已执行、当前用户要求、预算及暂停状态；保留旧目录作为证据。同一监测运行必须继续使用原共享数据库及登记路径；丢失状态、换目录或旧 v1 已有发送记录时停止并核对，不能自动迁移或清零。新批次也不得绕过仍适用的冷却、次数上限、未知结果或用户停止。
+
+## v2 共享执行入口
+
+先按 [监督与接续](supervision.md) 建立有明确截止、所有者、目标及任务绑定的共享 run。配置将 `version` 改为 `2`，增加 `supervision` 对象，包含 `runId`、绝对路径 `dbPath`、固定 `registryDir`、`contractPath` 及该合同文件的 `contractSha256`。数据库内合同必须与文件完全一致；不能仅改本地 JSON 来扩大授权。
+
+每个目标增加 `taskBindingId`、`executor` 和 `capability`。能力状态仅可为 `trial_authorized` 或 `verified_for_scope`：首次真实试运行须有 `authorizationRef`、`preflightEvidence` 和 `trialMaxDispatches`（默认一次，合同最多允许三次）；后续已验证模式须有 `resultEvidence`。没有历史成功记录不妨碍获授权的首次小范围试运行，但离线测试不能充当真实宿主成功记录。
+
+`nativeRetryEvidence` 在 v2 中必须是对象，包含 `runtimeVersion`、`provider`、`route`、`model`、整数 `upperBound`、小写 SHA256 `evidenceSha256` 和 Unix 秒 `validUntil`。必须与新鲜快照的真实版本/provider/route 一致。备用模型用 `nativeRetryEvidenceByModel` 分别保存依据；不能把另一条传输路线的上界拿来复用。
+
+共享合同对应目标的 `recoveryAuthorization` 须冻结配置中的模型、推理强度、备用模型、执行者、批次、交接路径与哈希、能力记录、重试依据及适配器路径。配置与合同不一致即拒绝。真实项目与运行身份通过可信的只读 `recoveryContextCommand` 返回，不能从配置中自填“已验证”：它接收 `threadId/turnId/batchId/taskBindingId/handoffSha256`，读回同一身份、实际采样时间、运行实例、归属、任务状态、暂停/审批/预算/在途操作以及原生路线。任一必要读取失败立即停止，不能使用上一轮缓存。
+
+独立聊天执行次序为 `RecoveryAdmission.reserve` → 再读新鲜状态 → `claim_for_send` → 宿主实际发送 → `record_outcome`。父线程恢复子智能体必须改走 `child_permit` 和 `claim_child_for_send`，同时核验父子身份、任务绑定、父线程安全边界和可用工具。模块不直接调用子智能体工具，也不切换子模型。首次失败链与新增恢复轮均占共享预算；发送未知、保留后取消及等待验收不会返还额度。
+
+本机尚无可用的既有控制 socket 时，只安装这些入口，保持容量自动恢复关闭。工具宿主能够观察和派工，不证明上述原生恢复入口可用。
 
 ## 已执行动作的核对适配器
 

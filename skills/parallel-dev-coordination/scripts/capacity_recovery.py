@@ -22,6 +22,7 @@ import time
 import uuid
 
 from recovery_rpc import Rpc
+from recovery_admission import RecoveryAdmission
 
 
 def digest(value):
@@ -137,8 +138,8 @@ def load_config(path):
     if len(raw) > 65536:
         raise ValueError("config exceeds 64 KiB")
     config = json.loads(raw)
-    if config.get("version") != 1:
-        raise ValueError("config version must be 1")
+    if config.get("version") not in (1, 2):
+        raise ValueError("config version must be 1 (observe only) or 2")
     targets = config.get("threads", [])
     if not 1 <= len(targets) <= 8:
         raise ValueError("select 1..8 explicitly authorized independent threads")
@@ -165,10 +166,14 @@ def load_config(path):
             raise ValueError("verified finite nativeFailureAttemptUpperBound required")
         if not t.get("nativeRetryEvidence"):
             raise ValueError("record how the native retry upper bound was verified")
-        gate = t.get("reconcileCommand")
-        if gate is not None and (not isinstance(gate, list) or not gate or
-                                 not all(isinstance(x, str) for x in gate) or not Path(gate[0]).is_absolute()):
-            raise ValueError("reconcileCommand must be a trusted absolute executable argv")
+        for name in ("reconcileCommand", "recoveryContextCommand"):
+            gate = t.get(name)
+            if gate is not None and (not isinstance(gate, list) or not gate or
+                                     not all(isinstance(x, str) for x in gate) or not Path(gate[0]).is_absolute()):
+                raise ValueError(name + " must be a trusted absolute executable argv")
+        if config["version"] == 2 and (not t.get("taskBindingId") or not t.get("executor")
+                                        or not isinstance(t.get("nativeRetryEvidence"), dict)):
+            raise ValueError("v2 requires task binding, executor and structured native retry evidence")
     policy = {"maxRecoveryTurns": 3, "maxFailureAttemptAllowance": 120, "deadlineSeconds": 900,
               "baseDelaySeconds": 60, "maxDelaySeconds": 300, "cooldownSeconds": 1800,
               "pollSeconds": 60}
@@ -178,8 +183,8 @@ def load_config(path):
     policy.update(overrides)
     if any(type(x) is not int or x <= 0 for x in policy.values()):
         raise ValueError("policy values must be positive integers")
-    if policy["maxRecoveryTurns"] > 5 or policy["deadlineSeconds"] > 3600 or policy["pollSeconds"] < 30:
-        raise ValueError("recovery limits: <=5 turns, <=1 hour, polling >=30 seconds")
+    if policy["maxRecoveryTurns"] > 3 or policy["deadlineSeconds"] > 900 or policy["pollSeconds"] < 30:
+        raise ValueError("recovery limits: <=3 turns, <=15 minutes, polling >=30 seconds")
     config["policy"] = policy
     return config, hashlib.sha256(raw).hexdigest()
 
@@ -220,7 +225,7 @@ SAFE_ITEMS = {"userMessage", "agentMessage", "reasoning", "plan"}
 
 class Recovery:
     def __init__(self, host, store, config, notify, execute=False, clock=time.time, jitter=random.uniform,
-                 cancelled=lambda _tid: False):
+                 cancelled=lambda _tid: False, admission=None):
         self.host, self.store, self.config, self.notify = host, store, config, notify
         self.execute, self.clock, self.jitter = execute, clock, jitter
         self.policy = config["policy"]
@@ -228,6 +233,13 @@ class Recovery:
         self.native_retrying = {(tid, v["turnId"]) for tid, v in signals.items() if v.get("willRetry") is True}
         self.retry_not_before = {(tid, v["turnId"]): v.get("notBefore", 0) for tid, v in signals.items()}
         self.cancelled = cancelled
+        self.admission = admission
+        if execute and admission is None:
+            raise ValueError("execute requires the shared supervision admission authority")
+        if admission is not None:
+            admission.bind_local_state(store)
+            for target in config["threads"]:
+                admission.validate_target(target, "independent")
 
     def event(self, msg):
         p = msg.get("params", {})
@@ -265,6 +277,33 @@ class Recovery:
                          "at": self.clock()})
         return old
 
+    @staticmethod
+    def adapter(command, request):
+        if not command:
+            return None
+        proc = subprocess.Popen(command, stdin=subprocess.PIPE, stdout=subprocess.PIPE,
+                                stderr=subprocess.DEVNULL, shell=False,
+                                creationflags=subprocess.CREATE_NO_WINDOW if os.name == "nt" else 0)
+        output = []
+        reader = threading.Thread(target=lambda: output.append(proc.stdout.read(65537)), daemon=True)
+        try:
+            proc.stdin.write(json.dumps(request).encode())
+            proc.stdin.close()
+            reader.start()
+            reader.join(timeout=10)
+            if reader.is_alive() or not output or len(output[0]) > 65536:
+                return None
+            if proc.wait(timeout=1):
+                return None
+            return json.loads(output[0])
+        finally:
+            if proc.poll() is None:
+                proc.kill()
+            proc.wait(timeout=2)
+            if reader.ident is not None:
+                reader.join(timeout=1)
+            proc.stdout.close()
+
     def gate(self, t, s):
         turn = s["turn"]
         if turn.get("itemsView") not in ("summary", "full") or "items" not in turn:
@@ -281,27 +320,7 @@ class Recovery:
                                for i in action_items]}
         # An explicitly configured project adapter checks real file/test/input-lease state.
         # Never feed arbitrary tool commands from a transcript to a shell.
-        proc = subprocess.Popen(command, stdin=subprocess.PIPE, stdout=subprocess.PIPE,
-                                stderr=subprocess.DEVNULL, shell=False,
-                                creationflags=subprocess.CREATE_NO_WINDOW if os.name == "nt" else 0)
-        output = []
-        reader = threading.Thread(target=lambda: output.append(proc.stdout.read(65537)), daemon=True)
-        try:
-            proc.stdin.write(json.dumps(request).encode())
-            proc.stdin.close()
-            reader.start()
-            reader.join(timeout=10)
-            if reader.is_alive() or not output or len(output[0]) > 65536:
-                return False
-            if proc.wait(timeout=1):
-                return False
-            result = json.loads(output[0])
-        finally:
-            if proc.poll() is None:
-                proc.kill()
-            proc.wait(timeout=2)
-            reader.join(timeout=1)
-            proc.stdout.close()
+        result = self.adapter(command, request) or {}
         return (result.get("safe") is True and result.get("turnId") == turn["id"]
                 and result.get("batchId") == t["batchId"]
                 and result.get("handoffSha256") == t["handoffSha256"]
@@ -315,7 +334,43 @@ class Recovery:
                        "effort": s["thread"].get("reasoningEffort"),
                        "queued": s["queued"], "terminals": s["terminals"]})
 
+    def safety_snapshot(self, t, s, model, root):
+        """Use a real read-only project/runtime adapter; never invent native identity."""
+        turn, thread, now = s["turn"], s["thread"], self.clock()
+        request = {"threadId": t["threadId"], "turnId": turn["id"], "batchId": t["batchId"],
+                   "taskBindingId": t["taskBindingId"], "handoffSha256": t["handoffSha256"]}
+        context = s.get("recoveryContext")
+        if context is None:
+            context = self.adapter(t.get("recoveryContextCommand"), request)
+        if not isinstance(context, dict) or any(context.get(k) != v for k, v in request.items()):
+            raise ValueError("fresh project/runtime context unavailable")
+        stamp = context.get("observedAt")
+        if (context.get("readSucceeded") is not True or type(stamp) not in (int, float)
+                or not 0 <= now-stamp <= RecoveryAdmission.MAX_SNAPSHOT_AGE):
+            raise ValueError("project/runtime context read stale or failed")
+        context_fingerprint = {k: v for k, v in context.items() if k != "observedAt"}
+        return dict(context, observedAt=now, fingerprint=digest([self.fingerprint(s), context_fingerprint]),
+                    readSucceeded=True, failedTurn=turn["id"], rootTurn=root,
+                    latestCapacityFailure=turn["status"] == "failed" and capacity_error(turn.get("error")),
+                    nativeRetryEnded=(t["threadId"], turn["id"]) not in self.native_retrying,
+                    notBefore=max(self.retry_not_before.get((t["threadId"], turn["id"]), 0),
+                                  self.store.data["threads"].get(t["threadId"], {}).get("due", now)),
+                    queued=s["queued"], paused=bool(s["goal"] and s["goal"].get("status") != "active"),
+                    goalStatus=s["goal"].get("status") if s["goal"] else "no_goal",
+                    parentThreadId=thread.get("parentThreadId"), observedModel=thread.get("model"),
+                    observedEffort=thread.get("reasoningEffort"), selectedModelSupported=t["effort"] in s["models"].get(model, []),
+                    settingsVerified=thread.get("reasoningEffort") == t["effort"],
+                    sideEffectsReconciled=self.gate(t, s), handoffValid=file_hash(t["handoffPath"]) == t["handoffSha256"])
+
     def step(self, t):
+        try:
+            return self._step(t)
+        except Exception:
+            # No previous snapshot may be used after even one necessary read failed.
+            return self.record(t, "attention", "required_read_or_authority_failed",
+                               contract=digest({"thread": t, "policy": self.policy}))
+
+    def _step(self, t):
         tid, now = t["threadId"], self.clock()
         old = self.store.data["threads"].get(tid, {})
         contract = digest({"thread": t, "policy": self.policy})
@@ -325,7 +380,7 @@ class Recovery:
             return self.record(t, "attention", "contract_changed")
         if old.get("state") == "uncertain" and old.get("reason") == "dispatch_intent":
             return self.record(t, "uncertain", "prior_dispatch_outcome_unknown")
-        if old.get("state") in ("uncertain", "attention", "suppressed", "done", "cooldown"):
+        if old.get("state") in ("uncertain", "attention", "suppressed", "done", "cooldown", "awaiting_verification"):
             return old  # Durable circuit: never reopen the same incident automatically.
         s = self.host.snapshot(tid)
         turn = s.get("turn")
@@ -347,7 +402,8 @@ class Recovery:
             if thread.get("model") != old["selectedModel"] or thread.get("reasoningEffort") != t["effort"]:
                 return self.record(t, "attention", "effective_model_or_effort_mismatch")
             if turn["status"] == "completed":
-                return self.record(t, "done", "recovery_turn_completed")
+                self.admission.record_outcome(old["intentId"], "awaiting_verification", {"turnId": turn["id"]})
+                return self.record(t, "awaiting_verification", "turn_completed_task_progress_unverified")
             if turn["status"] == "interrupted":
                 return self.record(t, "suppressed", "turn_interrupted")
         elif old.get("observedTurn") and turn["id"] != old["observedTurn"]:
@@ -360,6 +416,8 @@ class Recovery:
             if old:
                 return self.record(t, "suppressed", "not_a_capacity_failure")
             return None
+        if old.get("state") == "sent":
+            self.admission.record_outcome(old["intentId"], "failed", {"turnId": turn["id"], "capacityFailure": True})
         if s["terminals"]:
             return self.record(t, "attention", "background_operation_running", contract=contract)
         if file_hash(t["handoffPath"]) != t["handoffSha256"]:
@@ -412,6 +470,26 @@ class Recovery:
             return self.record(t, "attention", "handoff_changed")
         if self.cancelled(tid):
             return self.record(t, "suppressed", "user_stop_or_config_changed")
+        if self.admission is None:
+            return self.record(t, "attention", "shared_admission_unavailable")
+        safety = self.safety_snapshot(t, s, model, old["root"])
+        incident = digest([self.admission.run_id, t["taskBindingId"], old["root"]])
+        permit = self.admission.reserve(t, safety, {
+            "incidentId": incident, "attemptId": incident+":"+str(attempts+1),
+            "attemptSequence": attempts+1, "rootTurn": old["root"], "failedTurn": turn["id"],
+            "incidentDeadline": old["deadline"], "selectedModel": model, "effort": t["effort"]}, self.clock())
+        if not permit.get("allowed"):
+            return self.record(t, "attention", "shared_admission_denied:"+permit["reason"])
+        intent_id = permit["intentId"]
+        # Reserving consumes budget even if this final read or claim is cancelled.
+        latest = self.host.snapshot(tid)
+        latest_safety = self.safety_snapshot(t, latest, model, old["root"])
+        if self.cancelled(tid):
+            self.admission.record_outcome(intent_id, "not_sent", {"reason": "user_stop_or_config_changed"})
+            return self.record(t, "suppressed", "user_stop_or_config_changed")
+        claim = self.admission.claim_for_send(intent_id, t, latest_safety, self.clock())
+        if not claim.get("allowed"):
+            return self.record(t, "suppressed", "final_admission_denied:"+claim["reason"])
         message_id = str(uuid.uuid4())
         prompt = ("Agent Relay capacity recovery: continue only the unfinished portion of the existing "
                   "authorized batch. First verify the current Goal, standing rules, ownership, changed "
@@ -422,15 +500,17 @@ class Recovery:
                   f"Batch: {t['batchId']}; handoff: {t['handoffPath']}; SHA256: {t['handoffSha256']}.")
         # Write-ahead intent: after crash/timeout never resend an ambiguous turn/start.
         self.record(t, "uncertain", "dispatch_intent", announce=False, messageId=message_id,
-                    attempts=attempts+1, reservedFailureAttempts=old["reservedFailureAttempts"]+t["nativeFailureAttemptUpperBound"],
-                    selectedModel=model)
+                    attempts=attempts+1, reservedFailureAttempts=old["reservedFailureAttempts"]+permit["reservedNativeFailureAttemptUpperBound"],
+                    selectedModel=model, intentId=intent_id)
         try:
             result = self.host.send(tid, model, t["effort"], prompt, message_id)
             sent = result["turn"]
             if not sent.get("id") or sent["id"] == turn["id"]:
                 raise ValueError("turn/start may have steered an existing turn")
         except Exception:
+            self.admission.record_outcome(intent_id, "unknown", {"messageId": message_id})
             return self.record(t, "uncertain", "dispatch_outcome_unknown")
+        self.admission.record_outcome(intent_id, "accepted", {"turnId": sent["id"], "messageId": message_id})
         return self.record(t, "sent", "recovery_requested_not_yet_verified", sentTurn=sent["id"])
 
 
@@ -445,6 +525,9 @@ def main(argv=None):
     parser.add_argument("--check", action="store_true", help="read-only capability preflight; never resume or send")
     args = parser.parse_args(argv)
     config, config_hash = load_config(args.config)
+    admission = RecoveryAdmission.from_config(config) if config.get("version") == 2 else None
+    if args.execute and admission is None:
+        parser.error("--execute requires v2 config and an existing shared supervision run")
     if not args.state_dir.is_absolute() or not args.codex.is_absolute() or not args.sock.is_absolute():
         parser.error("state, codex and socket paths must be absolute")
     if not 1 <= args.duration_seconds <= 21600:
@@ -490,7 +573,7 @@ def main(argv=None):
             return ((args.state_dir / "stop.request").exists()
                     or (args.state_dir / (tid + ".pause")).exists()
                     or hashlib.sha256(args.config.read_bytes()).hexdigest() != config_hash)
-        recovery = Recovery(host, store, config, emit, args.execute, cancelled=cancelled)
+        recovery = Recovery(host, store, config, emit, args.execute, cancelled=cancelled, admission=admission)
         end = time.monotonic() + args.duration_seconds
         next_check = 0.0
         while time.monotonic() < end:

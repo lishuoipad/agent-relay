@@ -1,18 +1,23 @@
 """Behavioral failure-injection tests: never connect to a real conversation."""
 import copy
+from contextlib import redirect_stderr
 from email.utils import formatdate
 import json
+import io
 import os
 from pathlib import Path
 import subprocess
 import sys
 import tempfile
 import unittest
+from unittest.mock import patch
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "skills/parallel-dev-coordination/scripts"))
 from capacity_recovery import (Lock, NativeHost, Recovery, Store, capacity_error,
-                               file_hash, load_config, retry_after)
+                               file_hash, load_config, retry_after, main)
 from recovery_rpc import Rpc, RpcError
+from recovery_admission import RecoveryAdmission
+from supervision_store import SupervisionStore
 
 
 class Host:
@@ -28,12 +33,16 @@ class Host:
             "models": {"primary": ["high"], "gpt-6.1-sol": ["high"]},
         }
         self.calls, self.fail, self.change, self.reads = [], False, None, 0
+        self.context = None
 
     def snapshot(self, tid):
         self.reads += 1
         if self.change and self.reads == self.change[0]:
             self.change[1](self.data)
-        return copy.deepcopy(self.data)
+        result = copy.deepcopy(self.data)
+        if self.context:
+            result["recoveryContext"] = self.context(result)
+        return result
 
     def send(self, tid, model, effort, prompt, message_id):
         self.calls.append((tid, model, effort, prompt, message_id))
@@ -62,17 +71,54 @@ class RecoveryTests(unittest.TestCase):
                        "model": "primary", "effort": "high", "modelLocked": False,
                        "fallbackModels": ["gpt-6.1-sol"], "batchId": "batch-1",
                        "handoffPath": str(handoff), "handoffSha256": file_hash(handoff),
-                       "nativeFailureAttemptUpperBound": 30, "nativeRetryEvidence": "test fixture bound"}
+                       "nativeFailureAttemptUpperBound": 30, "taskBindingId": "binding-1", "executor": "fixture-owner",
+                       "capability": {"state": "verified_for_scope", "authorizationRef": "fixture-human-authorization",
+                                      "preflightEvidence": {"fixture": True}, "resultEvidence": {"fixture": True}},
+                       "nativeRetryEvidence": {"runtimeVersion": "fixture-v1", "provider": "fixture-provider",
+                                               "route": "fixture-route", "model": "primary", "upperBound": 30,
+                                               "evidenceSha256": "a"*64, "validUntil": 100000}}
+        self.target["nativeRetryEvidenceByModel"] = {"gpt-6.1-sol": dict(self.target["nativeRetryEvidence"], model="gpt-6.1-sol")}
         self.path = self.root / "config.json"
-        self.path.write_text(json.dumps({"version": 1, "threads": [self.target]}))
+        self.path.write_text(json.dumps({"version": 2, "threads": [self.target]}))
         self.config, _ = load_config(self.path)
+        self.config["threads"] = [self.target]
         self.store = Store(self.root / "state.json")
         self.host, self.events, self.now = Host(), [], 1000.0
+        self.shared = SupervisionStore(self.root / "shared.db", self.root / "registry")
+        self.fixture_run = 0
+        self.admission = self.make_admission()
+        self.host.context = lambda s: {
+            "threadId": self.target["threadId"], "taskBindingId": self.target["taskBindingId"],
+            "turnId": s["turn"]["id"], "batchId": self.target["batchId"],
+            "handoffSha256": self.target["handoffSha256"], "observedAt": self.now,
+            "readSucceeded": True, "runtimeInstanceId": "fixture-instance", "taskState": "blocked_capacity",
+            "taskBindingValid": True, "unfinishedWork": True, "ownershipValid": True,
+            "approvalPending": False, "budgetStopped": False, "runningOperations": [],
+            "nativeRuntime": {"runtimeVersion": "fixture-v1", "provider": "fixture-provider", "route": "fixture-route"}}
         self.engine = self.engine_for(self.store)
+
+    def make_admission(self):
+        self.fixture_run += 1
+        run_id = "fixture-run-"+str(self.fixture_run)
+        contract = {"start": 1000, "deadline": 10000, "owner": "fixture-owner",
+                    "targets": [{"threadId": self.target["threadId"], "taskBindingId": self.target["taskBindingId"],
+                                 "kind": "independent", "recoveryAuthorization": copy.deepcopy(self.target)}],
+                    "policy": {"maxAdditionalTurnsPerIncident": 3, "maxAdditionalTurnsPerMonitoringRun": 6,
+                               "maxFailureAttemptAllowance": 120, "maxFailureAttemptAllowancePerMonitoringRun": 120,
+                               "maxModelDispatchesPerMonitoringRun": 12,
+                               "minModelDispatchIntervalPerRecipientSeconds": 300}}
+        self.shared.create_run(run_id, contract, 1000)
+        return RecoveryAdmission(self.shared, run_id, contract)
 
     def engine_for(self, store, execute=True):
         return Recovery(self.host, store, self.config, self.events.append, execute,
-                        clock=lambda: self.now, jitter=lambda a, b: 1.0)
+                        clock=lambda: self.now, jitter=lambda a, b: 1.0, admission=self.admission)
+
+    def authorize_fixture_changes(self):
+        self.assertFalse(self.store.data["threads"])
+        self.admission = self.make_admission()
+        self.store = Store(self.root / ("state-"+str(self.fixture_run)+".json"))
+        self.engine = self.engine_for(self.store)
 
     def step(self):
         return self.engine.step(self.target)
@@ -104,7 +150,7 @@ class RecoveryTests(unittest.TestCase):
         self.assertEqual(self.host.calls[-1][1:3], ("gpt-6.1-sol", "high"))
         self.host.data["turn"]["status"] = "completed"
         self.host.data["thread"]["status"] = {"type": "idle"}
-        self.assertEqual(self.step()["state"], "done")
+        self.assertEqual(self.step()["state"], "awaiting_verification")
 
     def test_ack_does_not_prove_effective_model(self):
         self.send_first()
@@ -129,6 +175,7 @@ class RecoveryTests(unittest.TestCase):
 
     def test_locked_target_never_changes_model(self):
         self.target.update(modelLocked=True, fallbackModels=[])
+        self.authorize_fixture_changes()
         self.send_first()
         self.host.fail_again(self.now)
         self.step(); self.now += 121; self.step()
@@ -221,6 +268,7 @@ class RecoveryTests(unittest.TestCase):
         gate = self.root / "gate.py"
         gate.write_text('import sys,json\nr=json.load(sys.stdin)\nr.update(safe=True,runningOperations=[],pendingApprovals=[],ownershipValid=True,changesReconciled=True)\nprint(json.dumps(r))\n')
         self.target["reconcileCommand"] = [sys.executable, str(gate)]
+        self.authorize_fixture_changes()
         self.host.data["turn"]["items"].append({"id": "write-1", "type": "fileChange", "status": "completed"})
         self.send_first()
 
@@ -270,6 +318,7 @@ class RecoveryTests(unittest.TestCase):
         gate = self.root / "gate.py"
         gate.write_text('print("{\\"safe\\": false}")\n')
         self.target["reconcileCommand"] = [sys.executable, str(gate)]
+        self.authorize_fixture_changes()
         self.host.data["turn"]["items"].append({"type": "commandExecution", "status": "completed"})
         self.step(); self.now += 61
         self.assertEqual(self.step()["state"], "attention")
@@ -279,6 +328,7 @@ class RecoveryTests(unittest.TestCase):
         gate = self.root / "gate.py"
         gate.write_text('print("x"*1000000)\n')
         self.target["reconcileCommand"] = [sys.executable, str(gate)]
+        self.authorize_fixture_changes()
         self.host.data["turn"]["items"].append({"type": "commandExecution", "status": "completed"})
         self.step(); self.now += 61
         self.assertEqual(self.step()["state"], "attention")
@@ -329,6 +379,62 @@ class RecoveryTests(unittest.TestCase):
         with Lock(self.root / "owner.lock"):
             with self.assertRaises(RuntimeError):
                 with Lock(self.root / "owner.lock"): pass
+
+    def test_execute_requires_shared_admission(self):
+        with self.assertRaises(ValueError):
+            Recovery(self.host, self.store, self.config, self.events.append, execute=True)
+
+    def test_cli_v1_execute_cannot_open_host_or_bypass_shared_store(self):
+        self.path.write_text(json.dumps({"version": 1, "threads": [self.target]}))
+        with patch("capacity_recovery.Rpc") as rpc, redirect_stderr(io.StringIO()) as error:
+            with self.assertRaises(SystemExit) as result:
+                main(["--config", str(self.path), "--state-dir", str(self.root / "new-state"),
+                      "--codex", str(self.root / "codex.exe"), "--sock", str(self.root / "sock"), "--execute"])
+        self.assertEqual(result.exception.code, 2)
+        self.assertIn("requires v2", error.getvalue())
+        rpc.assert_not_called()
+
+    def test_first_required_read_failure_sends_zero(self):
+        self.step()
+        self.now += 61
+        self.host.snapshot = lambda tid: (_ for _ in ()).throw(ConnectionError("fixture"))
+        self.assertEqual(self.step()["reason"], "required_read_or_authority_failed")
+        self.assertEqual(self.host.calls, [])
+
+    def test_final_required_read_failure_sends_zero(self):
+        self.step()
+        self.now += 61
+        def fail(data):
+            raise ConnectionError("fixture final read")
+        self.host.change = (3, fail)
+        self.assertEqual(self.step()["reason"], "required_read_or_authority_failed")
+        self.assertEqual(self.host.calls, [])
+
+    def test_missing_native_runtime_evidence_disables_execution(self):
+        self.host.context = None
+        self.step(); self.now += 61
+        self.assertEqual(self.step()["reason"], "required_read_or_authority_failed")
+        self.assertEqual(self.host.calls, [])
+
+    def test_legacy_intent_cannot_be_silently_migrated(self):
+        legacy = Store(self.root / "legacy.json")
+        legacy.data["threads"]["test-thread"] = {"state": "uncertain", "attempts": 1,
+                                                "reservedFailureAttempts": 60}
+        legacy.save()
+        with self.assertRaises(ValueError):
+            self.make_admission().bind_local_state(legacy)
+
+    def test_changing_state_directory_cannot_reset_run(self):
+        with self.assertRaises(ValueError):
+            self.admission.bind_local_state(Store(self.root / "different-state.json"))
+
+    def test_completed_turn_and_acceptance_are_not_task_recovery(self):
+        self.send_first()
+        self.assertEqual(self.store.data["threads"]["test-thread"]["state"], "sent")
+        self.host.data["turn"]["status"] = "completed"
+        self.host.data["thread"]["status"] = {"type": "idle"}
+        self.assertEqual(self.step()["state"], "awaiting_verification")
+        self.assertNotIn("done", [event["state"] for event in self.events])
 
 
 class ClassificationTests(unittest.TestCase):

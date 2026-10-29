@@ -121,6 +121,12 @@ Record the chosen observer or direct-watch mode, cursors, the first real check, 
 
 See [observer responsibilities and verification](skills/parallel-dev-coordination/references/contracts-and-goals.md#观察者与首次接续核验).
 
+For a bounded supervision run, [the supervision guide](skills/parallel-dev-coordination/references/supervision.md) adds a local state reducer, persistent shared recovery and notification budgets, and separate evidence for acknowledgment, decisions and actual work. The lead and participating conversations own the workflow; a setup conversation is not a permanent dispatcher. A busy device-test batch does not suspend unrelated authorized work: the lead rechecks at a safe operation boundary.
+
+The Python reducer does not itself call chat tools, schedule monitoring or wake a model. An authorized tool host must supply fresh observations and consume each reserved notification once. Native recovery still requires a compatible existing control interface; unavailable paths remain disabled. Local tests do not prove live handoffs or an independent alert channel.
+
+For repeated nested `path + sha256` checks, use the [read-only delivery reference verifier](skills/parallel-dev-coordination/references/delivery-verification.md). Keep review progress and waiting dependencies in the existing acceptance record, bound to the frozen delivery hash. Matching bytes do not establish semantic correctness, visual acceptance or actual work completion.
+
 ## Capacity failure recovery
 
 An optional [Goal lifecycle guard](skills/parallel-dev-coordination/references/goal-lifecycle.md) prevents replaying stale pause instructions on supported native tool-hook paths. It binds a one-use pause receipt to a fresh user turn and checks the actual Goal state. Installation preserves existing hooks and requires native review; it never resumes Goals, edits Codex databases, resets budgets, or claims that file installation proves live protection.
@@ -216,13 +222,20 @@ skills/parallel-dev-coordination/
 │   ├── capacity_recovery.py
 │   ├── goal_guard.py
 │   ├── install_goal_guard.py
-│   └── recovery_rpc.py
+│   ├── recovery_rpc.py
+│   ├── recovery_admission.py
+│   ├── supervision_store.py
+│   ├── supervision.py
+│   └── verify_delivery_refs.py
 └── references/
     ├── capacity-recovery.md
+    ├── supervision.md
+    ├── delivery-verification.md
     ├── goal-lifecycle.md
     ├── contracts-and-goals.md
     ├── model-routing.md
-    └── shared-input.md
+    ├── shared-input.md
+    └── upload-efficiency.md
 ```
 
 The initial skill passed the bundled skill-creator structural validator and local checks of metadata and reference links. Those checks do not establish universal runtime compatibility or benchmarked productivity gains.
