@@ -1,0 +1,31 @@
+{
+  "title": "示例项目 · 开发状态",
+  "state_db": "~/.codex/state_5.sqlite",
+  "checkpoints": "./checkpoints",
+  "plan": "./plan.example.json",
+  "timezone_offset_hours": 8,
+  "threads": [
+    {
+      "id": "replace-with-your-existing-thread-id",
+      "name": "主开发对话",
+      "scope": "整合与验收"
+    }
+  ],
+  "friendly_plan": {
+    "UI-01": "界面与操作"
+  },
+  "rules": [
+    {
+      "pattern": "界面|窗口|layout",
+      "summary": "完善界面与操作",
+      "plan_ids": [
+        "UI-01"
+      ],
+      "validation": "按现有记录关联；实际验证范围见详情"
+    }
+  ],
+  "text_replacements": {
+    "Root": "主开发对话"
+  },
+  "plan_id_pattern": "\\b(?:UI|BUILD)-\\d+\\b"
+}

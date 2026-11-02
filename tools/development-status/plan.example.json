@@ -1,0 +1,10 @@
+{
+  "tasks": [
+    {
+      "id": "UI-01",
+      "title": "界面与操作",
+      "status": "in-progress",
+      "acceptance": "核验受影响状态和实际操作；未测项单独记录。"
+    }
+  ]
+}

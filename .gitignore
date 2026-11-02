@@ -4,3 +4,9 @@ __pycache__/
 *.py[cod]
 .env
 .env.*
+
+# Optional panel: machine-local configuration and runtime evidence
+tools/development-status/*.local.json
+tools/development-status/*-capture.png
+tools/development-status/*-capture.png.json
+tools/development-status/*.sqlite*

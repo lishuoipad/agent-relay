@@ -36,6 +36,12 @@ The number 3 describes our development environment, not a fixed limit across all
 
 The aim is more accepted work with less waiting and rework. Adding agents is useful only when the work can actually be separated.
 
+## Optional local status panel
+
+The [local development status panel](tools/development-status/README.md) is a Windows WPF view of existing conversations, subagents and plan entries. It distinguishes paused, delivered and ended records, with timestamps and expandable public evidence. Machine paths, thread IDs and project matching rules belong in an explicitly selected local JSON profile.
+
+It makes no model calls or network requests and does not dispatch work, operate a phone or install a background service. Its Codex SQLite/rollout reader is version-dependent: it displays recorded evidence, not authoritative live status. Requires PowerShell 7.5+ and Python 3.10+. This optional tool is separate from skill installation.
+
 ## Install
 
 In Codex, ask the built-in skill installer:
